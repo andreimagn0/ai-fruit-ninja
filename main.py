@@ -1,4 +1,5 @@
 import pygame
+import random
 
 from vision.mouse_tracker import MouseTracker
 from game.fruit import Fruit
@@ -8,6 +9,23 @@ from game.collision import blade_crosses_fruit
 WIDTH = 1280
 HEIGHT = 720
 FPS = 60
+
+# Random fruit creation
+def create_random_fruit():
+    x = random.randint(200, WIDTH - 200)
+    y = HEIGHT + 50 # Start below the screen
+
+    # Random launch velocity
+    vx = random.randint(-200, 200)
+    vy = random.randint(-900, -700)
+
+    return Fruit(
+        x=x,
+        y=y,
+        radius=50,
+        vx=vx,
+        vy=vy,
+    )
 
 # SETUP
 pygame.init()
@@ -20,10 +38,7 @@ font = pygame.font.Font(None, 48)
 
 mouse_tracker = MouseTracker(WIDTH, HEIGHT)
 
-fruit = Fruit(
-    WIDTH // 2,
-    HEIGHT // 2
-    )
+fruit = create_random_fruit()
 
 score = 0
 
@@ -31,6 +46,9 @@ score = 0
 running = True
 
 while running:
+
+    dt = clock.tick(FPS) / 1000.0
+
     # Check for events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -48,6 +66,9 @@ while running:
 
     # Get the current fake BladeState
     blade = mouse_tracker.get_blade_state()
+
+    # Update fruit position
+    fruit.update(dt)
 
     # Convert normalized coordinates back into pixels
     blade_x = int(blade.x * WIDTH)
@@ -69,6 +90,12 @@ while running:
         ):
             fruit.sliced = True
             score += 100
+
+    # Fruit cleanup
+    if fruit.sliced:
+        fruit = create_random_fruit()
+    elif fruit.is_offscreen(HEIGHT):
+        fruit = create_random_fruit()
 
     # Drawing
     screen.fill((30, 30, 30))
@@ -96,8 +123,5 @@ while running:
 
     # Show everything we drew
     pygame.display.flip()
-
-    # Limit the game to 60 FPS
-    clock.tick(FPS)
 
 pygame.quit()
