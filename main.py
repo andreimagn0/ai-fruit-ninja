@@ -12,13 +12,20 @@ HEIGHT = 720
 FPS = 60
 MIN_SLICE_VELOCITY = 0.8
 GAME_DURATION = 30.0
+BASE_SPAWN_INTERVAL = 1.2
+MIN_SPAWN_INTERVAL = 0.45
+DIFFICULTY_RATE = 0.025
+MAX_FRUITS = 5
 
 
 def create_random_fruit():
     x = random.randint(200, WIDTH - 200)
     y = HEIGHT + 50
 
-    vx = random.randint(-200, 200)
+    if x < WIDTH // 2:
+        vx = random.randint(50, 250)
+    else:
+        vx = random.randint(-250, -50)
     vy = random.randint(-900, -700)
 
     return Fruit(
@@ -42,9 +49,10 @@ font = pygame.font.Font(None, 48)
 tracker = LiveHandTracker()
 tracker.start()
 
-fruit = create_random_fruit()
+fruits = []
 score = 0
 time_remaining = GAME_DURATION
+spawn_timer = 0.0
 
 running = True
 
@@ -59,9 +67,10 @@ try:
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
-                    fruit = create_random_fruit()
+                    fruits = []
                     score = 0
                     time_remaining = GAME_DURATION
+                    spawn_timer = 0.0
 
         # GET LIVE HAND TRACKING STATE
         blade, camera_frame = tracker.get_blade_state()
@@ -76,33 +85,52 @@ try:
         # Update timer
         time_remaining = max(0, time_remaining - dt)
 
-        # Update fruit physics
-        fruit.update(dt)
+        # Fruit spawning
+        if time_remaining > 0:
+            spawn_timer -= dt
+
+            if spawn_timer <= 0 and len(fruits) < MAX_FRUITS:
+                fruits.append(create_random_fruit())
+
+                elapsed_time = GAME_DURATION - time_remaining
+
+                spawn_interval = max(
+                    MIN_SPAWN_INTERVAL,
+                    BASE_SPAWN_INTERVAL - elapsed_time * DIFFICULTY_RATE
+                )
+
+                spawn_timer = spawn_interval
+
+        # Update fruit
+        for fruit in fruits:
+            fruit.update(dt)
 
         # COLLISION
-        if (
-            time_remaining > 0
-            and blade.visible
-            and blade.velocity >= MIN_SLICE_VELOCITY
-            and not fruit.sliced
-        ):
-            if blade_crosses_fruit(
-                prev_blade_x,
-                prev_blade_y,
-                blade_x,
-                blade_y,
-                fruit.x,
-                fruit.y,
-                fruit.radius,
+        for fruit in fruits:
+            if (
+                time_remaining > 0
+                and blade.visible
+                and blade.velocity >= MIN_SLICE_VELOCITY
+                and not fruit.sliced
             ):
-                fruit.sliced = True
-                score += 100
+                if blade_crosses_fruit(
+                    prev_blade_x,
+                    prev_blade_y,
+                    blade_x,
+                    blade_y,
+                    fruit.x,
+                    fruit.y,
+                    fruit.radius,
+                ):
+                    fruit.sliced = True
+                    score += 100
 
-        # Replace fruit once sliced or offscreen
-        if fruit.sliced:
-            fruit = create_random_fruit()
-        elif fruit.is_offscreen(HEIGHT):
-            fruit = create_random_fruit()
+        # Cleanup
+        fruits = [
+            fruit
+            for fruit in fruits
+            if not fruit.sliced and not fruit.is_offscreen(HEIGHT)
+        ]
 
         # DRAWING
         screen.fill((30, 30, 30))
@@ -126,7 +154,8 @@ try:
         screen.blit(score_text, (20, 20))
         screen.blit(timer_text, timer_rect)
 
-        fruit.draw(screen)
+        for fruit in fruits:
+            fruit.draw(screen)
 
         # Display game over screen
         if time_remaining <= 0:
