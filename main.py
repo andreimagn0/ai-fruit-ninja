@@ -10,6 +10,8 @@ from game.collision import blade_crosses_fruit
 WIDTH = 1280
 HEIGHT = 720
 FPS = 60
+MIN_SLICE_VELOCITY = 0.8
+GAME_DURATION = 30.0
 
 
 def create_random_fruit():
@@ -42,6 +44,7 @@ tracker.start()
 
 fruit = create_random_fruit()
 score = 0
+time_remaining = GAME_DURATION
 
 running = True
 
@@ -58,6 +61,7 @@ try:
                 if event.key == pygame.K_r:
                     fruit = create_random_fruit()
                     score = 0
+                    time_remaining = GAME_DURATION
 
         # GET LIVE HAND TRACKING STATE
         blade, camera_frame = tracker.get_blade_state()
@@ -69,11 +73,19 @@ try:
         prev_blade_x = int(blade.prev_x * WIDTH)
         prev_blade_y = int(blade.prev_y * HEIGHT)
 
+        # Update timer
+        time_remaining = max(0, time_remaining - dt)
+
         # Update fruit physics
         fruit.update(dt)
 
         # COLLISION
-        if blade.visible and not fruit.sliced:
+        if (
+            time_remaining > 0
+            and blade.visible
+            and blade.velocity >= MIN_SLICE_VELOCITY
+            and not fruit.sliced
+        ):
             if blade_crosses_fruit(
                 prev_blade_x,
                 prev_blade_y,
@@ -101,9 +113,34 @@ try:
             (255, 255, 255),
         )
 
+        timer_text = font.render(
+            f"Time: {time_remaining:.1f}",
+            True,
+            (255, 255, 255),
+        )
+
+        timer_rect = timer_text.get_rect(
+            topright=(WIDTH - 20, 20)
+        )
+
         screen.blit(score_text, (20, 20))
+        screen.blit(timer_text, timer_rect)
 
         fruit.draw(screen)
+
+        # Display game over screen
+        if time_remaining <= 0:
+            game_over_text = font.render(
+                "TIME'S UP!",
+                True,
+                (255, 255, 255),
+            )
+
+            game_over_rect = game_over_text.get_rect(
+                center=(WIDTH // 2, HEIGHT // 2)
+            )
+
+            screen.blit(game_over_text, game_over_rect)
 
         # Only draw blade when CV currently sees motion
         if blade.visible:
@@ -125,7 +162,9 @@ try:
 
         # Temporary debug telemetry
         debug_text = font.render(
-            f"Visible: {blade.visible}  Vel: {blade.velocity:.2f}",
+            f"Visible: {blade.visible}  "
+            f"Vel: {blade.velocity:.2f}  "
+            f"Threshold: {MIN_SLICE_VELOCITY:.2f}",
             True,
             (255, 255, 255),
         )
