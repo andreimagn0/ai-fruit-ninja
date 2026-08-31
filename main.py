@@ -4,6 +4,7 @@ import random
 from vision.hand_tracker import LiveHandTracker
 from game.fruit import Fruit
 from game.collision import blade_crosses_fruit
+from leaderboard.leaderboard import load_scores, add_score
 
 
 # =========================================================
@@ -124,7 +125,7 @@ state_elapsed = 0.0
 
 player_initials = ""
 
-session_scores = []
+session_scores = load_scores()
 
 running = True
 
@@ -198,16 +199,10 @@ try:
 
                         if len(player_initials) > 0:
 
-                            session_scores.append({
-                                "name": player_initials,
-                                "score": final_score,
-                            })
-
-                            session_scores = sorted(
-                                session_scores,
-                                key=lambda entry: entry["score"],
-                                reverse=True,
-                            )[:10]
+                            session_scores = add_score(
+                                player_initials,
+                                final_score,
+                            )
 
                             state = LEADERBOARD
                             state_elapsed = 0.0
