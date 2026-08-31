@@ -4,6 +4,8 @@ import random
 from vision.hand_tracker import LiveHandTracker
 from game.fruit import Fruit
 from game.collision import blade_crosses_fruit
+from game.effects import Particle, ScorePopup
+
 from leaderboard.leaderboard import load_scores, add_score
 
 
@@ -97,6 +99,10 @@ pygame.init()
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("AI Fruit Ninja")
 
+slice_sound = pygame.mixer.Sound(
+    "assets/sounds/bamboo-swipe-1.wav"
+)
+
 clock = pygame.time.Clock()
 
 font = pygame.font.Font(None, 48)
@@ -113,6 +119,10 @@ tracker.start()
 # =========================================================
 
 fruits = []
+
+particles = []
+score_popups = []
+blade_trail = []
 
 score = 0
 final_score = 0
@@ -158,6 +168,10 @@ try:
 
                 if event.key == pygame.K_r:
                     fruits = []
+
+                    particles = []
+                    score_popups = []
+                    blade_trail = []
 
                     score = 0
                     final_score = 0
@@ -232,6 +246,10 @@ try:
 
                 fruits = []
 
+                particles = []
+                score_popups = []
+                blade_trail = []
+
                 score = 0
 
                 time_remaining = GAME_DURATION
@@ -269,6 +287,20 @@ try:
                 0,
                 time_remaining - dt
             )
+
+
+            # Update blade trail
+            if blade.visible:
+                blade_trail.append(
+                    (blade_x, blade_y)
+                )
+
+                # Only remember the most recent 12 positions
+                blade_trail = blade_trail[-8:]
+
+            else:
+                blade_trail = []
+
 
 
             # -----------------------------------------
@@ -352,6 +384,25 @@ try:
 
                             fruit.sliced = True
                             score += 100
+                            slice_sound.play()
+
+                            # Create slice particles
+                            for _ in range(12):
+                                particles.append(
+                                    Particle(
+                                        fruit.x,
+                                        fruit.y,
+                                    )
+                                )
+
+                            # Create floating +100 text
+                            score_popups.append(
+                                ScorePopup(
+                                    fruit.x,
+                                    fruit.y,
+                                    "+100",
+                                )
+                            )
 
 
                 # -------------------------------------
@@ -365,6 +416,27 @@ try:
                         not fruit.sliced
                         and not fruit.is_offscreen(HEIGHT)
                     )
+                ]
+
+                # Update particles
+                for particle in particles:
+                    particle.update(dt)
+
+                particles = [
+                    particle
+                    for particle in particles
+                    if not particle.is_dead()
+                ]
+
+
+                # Update score popups
+                for popup in score_popups:
+                    popup.update(dt)
+
+                score_popups = [
+                    popup
+                    for popup in score_popups
+                    if not popup.is_dead()
                 ]
 
 
@@ -491,6 +563,17 @@ try:
             for fruit in fruits:
                 fruit.draw(screen)
 
+            # Draw particles
+            for particle in particles:
+                particle.draw(screen)
+
+            # Draw floating score popups
+            for popup in score_popups:
+                popup.draw(
+                    screen,
+                    small_font,
+                )
+
 
             # Score
             score_text = font.render(
@@ -523,6 +606,35 @@ try:
 
 
             # Blade
+
+            # Draw blade trail
+            if len(blade_trail) >= 2:
+
+                for i in range(
+                    1,
+                    len(blade_trail)
+                ):
+
+                    start = blade_trail[i - 1]
+                    end = blade_trail[i]
+
+                    # Trail gets thicker near the fingertip
+                    width = max(
+                        2,
+                        int(
+                            8 * i / len(blade_trail)
+                        )
+                    )
+
+                    pygame.draw.line(
+                        screen,
+                        (220, 220, 220),
+                        start,
+                        end,
+                        width,
+                    )
+
+            # Draw blade fingertip
             if blade.visible:
 
                 pygame.draw.circle(
@@ -530,14 +642,6 @@ try:
                     (255, 255, 255),
                     (blade_x, blade_y),
                     10,
-                )
-
-                pygame.draw.line(
-                    screen,
-                    (200, 200, 200),
-                    (prev_blade_x, prev_blade_y),
-                    (blade_x, blade_y),
-                    4,
                 )
 
 
