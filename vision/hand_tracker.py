@@ -140,10 +140,17 @@ class LiveHandTracker:
         with self._lock:
             return self._latest_state, self._latest_frame.copy()
 
-    def stop(self):
-        self._running = False
-        if hasattr(self, "_thread") and self._thread.is_alive():
-            self._thread.join(timeout=1.0)
-        if self.cap and self.cap.isOpened():
-            self.cap.release()
-        self.hands.close()
+def stop(self):
+    self._running = False
+
+    thread = getattr(self, "_thread", None)
+    if thread and thread.is_alive():
+        thread.join(timeout=1.0)
+
+    # Avoid closing resources while the worker may still be using them.
+    if thread and thread.is_alive():
+        return
+
+    if self.cap and self.cap.isOpened():
+        self.cap.release()
+    self.hands.close()
