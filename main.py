@@ -1,5 +1,7 @@
 import pygame
 import random
+import cv2
+import numpy as np
 
 from vision.hand_tracker import LiveHandTracker
 from game.fruit import Fruit
@@ -46,6 +48,43 @@ LEADERBOARD = "LEADERBOARD"
 # =========================================================
 # HELPER FUNCTIONS
 # =========================================================
+
+def render_pip_overlay(
+    surface,
+    cv_frame,
+    pip_width=240,
+    margin=20,
+):
+    if cv_frame is None or cv_frame.size == 0:
+        return
+
+    frame_height, frame_width, _ = cv_frame.shape
+    pip_height = int(pip_width * (frame_height / frame_width))
+
+    small_frame = cv2.resize(
+        cv_frame,
+        (pip_width, pip_height),
+        interpolation=cv2.INTER_NEAREST,
+    )
+    rgb_frame = cv2.cvtColor(
+        small_frame,
+        cv2.COLOR_BGR2RGB,
+    )
+
+    surf_array = np.transpose(rgb_frame, (1, 0, 2))
+    pip_surface = pygame.surfarray.make_surface(surf_array)
+
+    pip_x = WIDTH - pip_width - margin
+    pip_y = HEIGHT - pip_height - margin
+
+    pygame.draw.rect(
+        surface,
+        (0, 255, 0),
+        (pip_x - 2, pip_y - 2, pip_width + 4, pip_height + 4),
+        2,
+    )
+    surface.blit(pip_surface, (pip_x, pip_y))
+
 
 def create_random_fruit():
     x = random.randint(200, WIDTH - 200)
@@ -96,7 +135,9 @@ def draw_centered_text(
 
 pygame.init()
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode(
+    (WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED
+)
 pygame.display.set_caption("AI Fruit Ninja")
 
 slice_sound = pygame.mixer.Sound(
@@ -161,6 +202,9 @@ try:
                 running = False
 
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                    continue
 
                 # -----------------------------------------
                 # Developer reset
@@ -757,6 +801,7 @@ try:
         # DISPLAY FINISHED FRAME
         # =================================================
 
+        render_pip_overlay(screen, camera_frame, pip_width=240)
         pygame.display.flip()
 
 
