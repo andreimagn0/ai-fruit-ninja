@@ -1,10 +1,11 @@
-import pygame
 import random
+import pygame
+import cv2
+import numpy as np
 
-from vision.hand_tracker import LiveHandTracker
-from game.fruit import Fruit
 from game.collision import blade_crosses_fruit
-
+from game.fruit import Fruit
+from vision.hand_tracker import LiveHandTracker
 
 # GAME SETTINGS
 WIDTH = 1280
@@ -18,6 +19,27 @@ DIFFICULTY_RATE = 0.025
 MAX_FRUITS = 5
 
 
+def render_pip_overlay(surface, cv_frame, pip_width=240, margin=20):
+    """Zero-copy fast PiP rendering using surfarray."""
+    if cv_frame is None or cv_frame.size == 0:
+        return
+
+    fh, fw, _ = cv_frame.shape
+    pip_height = int(pip_width * (fh / fw))
+    
+    # Fast resize & BGR to RGB
+    small_frame = cv2.resize(cv_frame, (pip_width, pip_height), interpolation=cv2.INTER_NEAREST)
+    rgb_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+    # Transpose matrix for Pygame surfarray layout (width, height, channels)
+    surf_array = np.transpose(rgb_frame, (1, 0, 2))
+    pip_surface = pygame.surfarray.make_surface(surf_array)
+
+    pip_x = WIDTH - pip_width - margin
+    pip_y = HEIGHT - pip_height - margin
+
+    pygame.draw.rect(surface, (0, 255, 0), (pip_x - 2, pip_y - 2, pip_width + 4, pip_height + 4), 2)
+    surface.blit(pip_surface, (pip_x, pip_y))
 def create_random_fruit():
     x = random.randint(200, WIDTH - 200)
     y = HEIGHT + 50
@@ -40,7 +62,10 @@ def create_random_fruit():
 # SETUP
 pygame.init()
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+# Launch in hardware-scaled full screen maintaining 1280x720 design resolution
+screen = pygame.display.set_mode(
+    (WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED
+)
 pygame.display.set_caption("AI Fruit Ninja")
 
 clock = pygame.time.Clock()
@@ -66,7 +91,9 @@ try:
                 running = False
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
+                if event.key == pygame.K_ESCAPE:  # Quick exit key
+                    running = False
+                elif event.key == pygame.K_r:  # Reset game
                     fruits = []
                     score = 0
                     time_remaining = GAME_DURATION
@@ -96,7 +123,7 @@ try:
 
                 spawn_interval = max(
                     MIN_SPAWN_INTERVAL,
-                    BASE_SPAWN_INTERVAL - elapsed_time * DIFFICULTY_RATE
+                    BASE_SPAWN_INTERVAL - elapsed_time * DIFFICULTY_RATE,
                 )
 
                 spawn_timer = spawn_interval
@@ -147,9 +174,7 @@ try:
             (255, 255, 255),
         )
 
-        timer_rect = timer_text.get_rect(
-            topright=(WIDTH - 20, 20)
-        )
+        timer_rect = timer_text.get_rect(topright=(WIDTH - 20, 20))
 
         screen.blit(score_text, (20, 20))
         screen.blit(timer_text, timer_rect)
@@ -160,7 +185,7 @@ try:
         # Display game over screen
         if time_remaining <= 0:
             game_over_text = font.render(
-                "TIME'S UP!",
+                "TIME'S UP! Press 'R' to Restart",
                 True,
                 (255, 255, 255),
             )
@@ -199,8 +224,10 @@ try:
         )
 
         screen.blit(debug_text, (20, 70))
-
+        render_pip_overlay(screen, camera_frame, pip_width=240)
         pygame.display.flip()
+        # Render PiP webcam feed in bottom-right corner
+        
 
 finally:
     tracker.stop()
