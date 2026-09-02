@@ -8,7 +8,7 @@ class Fruit:
         radius=50,
         vx=0,
         vy=0,
-        gravity=1000
+        gravity=1400
     ):
         self.x = x
         self.y = y

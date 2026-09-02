@@ -22,10 +22,14 @@ FPS = 60
 MIN_SLICE_VELOCITY = 0.8
 GAME_DURATION = 30.0
 
+MIN_FRUIT_RADIUS = 35
+MAX_FRUIT_RADIUS = 50
+
 COUNTDOWN_DURATION = 3.5
-GAME_OVER_DURATION = 5.0
-INITIALS_TIMEOUT = 15.0
-LEADERBOARD_DURATION = 8.0
+GAME_OVER_DURATION = 4.0
+NAME_TIMEOUT = 15.0
+LEADERBOARD_DURATION = 6.0
+MAX_NAME_LENGTH = 14
 
 BASE_SPAWN_INTERVAL = 1.2
 MIN_SPAWN_INTERVAL = 0.45
@@ -41,7 +45,7 @@ ATTRACT = "ATTRACT"
 COUNTDOWN = "COUNTDOWN"
 PLAYING = "PLAYING"
 GAME_OVER = "GAME_OVER"
-INITIALS = "INITIALS"
+NAME = "NAME"
 LEADERBOARD = "LEADERBOARD"
 
 
@@ -87,23 +91,31 @@ def render_pip_overlay(
 
 
 def create_random_fruit():
+
+    # Random radius
+    radius = random.randint(
+        MIN_FRUIT_RADIUS,
+        MAX_FRUIT_RADIUS
+    )
+
     x = random.randint(200, WIDTH - 200)
-    y = HEIGHT + 50
+    y = HEIGHT + radius
 
     # Fruit on left launches toward center
     if x < WIDTH // 2:
-        vx = random.randint(50, 250)
+        vx = random.randint(50, 400)
 
     # Fruit on right launches toward center
     else:
-        vx = random.randint(-250, -50)
+        vx = random.randint(-400, -50)
 
-    vy = random.randint(-900, -700)
+    # Launch velocity
+    vy = random.randint(-1300, -850)
 
     return Fruit(
         x=x,
         y=y,
-        radius=50,
+        radius=radius,
         vx=vx,
         vy=vy,
     )
@@ -140,9 +152,12 @@ screen = pygame.display.set_mode(
 )
 pygame.display.set_caption("AI Fruit Ninja")
 
-slice_sound = pygame.mixer.Sound(
-    "assets/sounds/bamboo-swipe-1.wav"
-)
+slice_sounds = [
+    pygame.mixer.Sound("assets/sounds/bamboo-swipe-1.wav"),
+    pygame.mixer.Sound("assets/sounds/bamboo-swipe-2.wav"),
+    pygame.mixer.Sound("assets/sounds/bamboo-swipe-3.wav"),
+    pygame.mixer.Sound("assets/sounds/bamboo-swipe-4.wav"),
+]
 
 clock = pygame.time.Clock()
 
@@ -174,7 +189,7 @@ spawn_timer = 0.0
 state = ATTRACT
 state_elapsed = 0.0
 
-player_initials = ""
+player_name = ""
 
 session_scores = load_scores()
 
@@ -206,28 +221,6 @@ try:
                     running = False
                     continue
 
-                # -----------------------------------------
-                # Developer reset
-                # -----------------------------------------
-
-                if event.key == pygame.K_r:
-                    fruits = []
-
-                    particles = []
-                    score_popups = []
-                    blade_trail = []
-
-                    score = 0
-                    final_score = 0
-
-                    time_remaining = GAME_DURATION
-                    spawn_timer = 0.0
-
-                    player_initials = ""
-
-                    state = ATTRACT
-                    state_elapsed = 0.0
-
 
                 # -----------------------------------------
                 # ATTRACT input
@@ -241,13 +234,13 @@ try:
 
 
                 # -----------------------------------------
-                # INITIALS input
+                # NAME input
                 # -----------------------------------------
 
-                elif state == INITIALS:
+                elif state == NAME:
 
                     if event.key == pygame.K_BACKSPACE:
-                        player_initials = player_initials[:-1]
+                        player_name = player_name[:-1]
 
                         # Reset inactivity timer
                         state_elapsed = 0.0
@@ -255,10 +248,12 @@ try:
 
                     elif event.key == pygame.K_RETURN:
 
-                        if len(player_initials) > 0:
+                        player_name = player_name.strip()
+
+                        if len(player_name) > 0:
 
                             session_scores = add_score(
-                                player_initials,
+                                player_name,
                                 final_score,
                             )
 
@@ -266,14 +261,24 @@ try:
                             state_elapsed = 0.0
 
 
-                    elif (
-                        event.unicode.isalnum()
-                        and len(player_initials) < 3
-                    ):
-                        player_initials += event.unicode.upper()
+                    elif len(player_name) < MAX_NAME_LENGTH:
 
-                        # Reset inactivity timer
-                        state_elapsed = 0.0
+                        # Allow letters
+                        if event.unicode.isalpha():
+                            player_name += event.unicode
+
+                            state_elapsed = 0.0
+
+                        # Allow a space, but not as the first character
+                        # and not twice in a row
+                        elif (
+                            event.key == pygame.K_SPACE
+                            and len(player_name) > 0
+                            and not player_name.endswith(" ")
+                        ):
+                            player_name += " "
+
+                            state_elapsed = 0.0
 
 
         # =================================================
@@ -428,7 +433,7 @@ try:
 
                             fruit.sliced = True
                             score += 100
-                            slice_sound.play()
+                            random.choice(slice_sounds).play()
 
                             # Create slice particles
                             for _ in range(12):
@@ -492,17 +497,17 @@ try:
 
             if state_elapsed >= GAME_OVER_DURATION:
 
-                player_initials = ""
+                player_name = ""
 
-                state = INITIALS
+                state = NAME
                 state_elapsed = 0.0
 
 
-        elif state == INITIALS:
+        elif state == NAME:
 
-            if state_elapsed >= INITIALS_TIMEOUT:
+            if state_elapsed >= NAME_TIMEOUT:
 
-                player_initials = ""
+                player_name = ""
 
                 state = ATTRACT
                 state_elapsed = 0.0
@@ -726,14 +731,14 @@ try:
 
 
         # ---------------------------------------------
-        # INITIALS
+        # NAME
         # ---------------------------------------------
 
-        elif state == INITIALS:
+        elif state == NAME:
 
             draw_centered_text(
                 screen,
-                "ENTER YOUR INITIALS",
+                "ENTER YOUR NAME",
                 title_font,
                 220,
             )
@@ -745,15 +750,12 @@ try:
                 330,
             )
 
-            display_initials = player_initials
-
-            while len(display_initials) < 3:
-                display_initials += "_"
+            display_name = player_name + "_"
 
             draw_centered_text(
                 screen,
-                display_initials,
-                large_font,
+                display_name,
+                title_font,
                 450,
             )
 
